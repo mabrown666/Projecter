@@ -279,6 +279,10 @@ def remove_task_resource(task_id, resource_id):
     db.commit()
     return jsonify({'status': 'success'})
 
+@app.route('/favicon.ico')
+def favicon2():
+    return send_from_directory(app.root_path,'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
