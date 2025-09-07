@@ -1,0 +1,37 @@
+DROP TABLE IF EXISTS RequiredResources;
+DROP TABLE IF EXISTS Resources;
+DROP TABLE IF EXISTS Tasks;
+DROP TABLE IF EXISTS Project;
+
+CREATE TABLE Project (
+    ProjectID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Description TEXT NOT NULL,
+    Bucket TEXT,
+    Notes TEXT
+);
+
+CREATE TABLE Tasks (
+    TaskID INTEGER PRIMARY KEY AUTOINCREMENT,
+    ProjectID INTEGER NOT NULL,
+    Description TEXT NOT NULL,
+    Notes TEXT,
+    Duration REAL,
+    Started TEXT,
+    Completed TEXT,
+    DependentTaskID INTEGER,
+    FOREIGN KEY (ProjectID) REFERENCES Project (ProjectID) ON DELETE CASCADE,
+    FOREIGN KEY (DependentTaskID) REFERENCES Tasks (TaskID) ON DELETE SET NULL
+);
+
+CREATE TABLE Resources (
+    ResourceID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Description TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE RequiredResources (
+    TaskID INTEGER NOT NULL,
+    ResourceID INTEGER NOT NULL,
+    PRIMARY KEY (TaskID, ResourceID),
+    FOREIGN KEY (TaskID) REFERENCES Tasks (TaskID) ON DELETE CASCADE,
+    FOREIGN KEY (ResourceID) REFERENCES Resources (ResourceID) ON DELETE CASCADE
+);

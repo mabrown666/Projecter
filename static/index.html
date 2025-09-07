@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projecter</title>
+    <link id="theme-stylesheet" rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="app-icon"></div>
+                <h1>Projecter</h1>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="#" id="projects-menu-btn" class="active">Projects</a></li>
+                <li><a href="#" id="resources-menu-btn">Resources</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <label class="switch">
+                    <input type="checkbox" id="dark-mode-toggle">
+                    <span class="slider round"></span>
+                </label>
+                <span>Dark Mode</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="main-header">
+                <div class="search-wrapper">
+                    <input class="search-input" type="text" id="search-input" placeholder="Search Projects...">
+                </div>
+                <button class="add-btn" id="new-project-btn" title="Add New Project">+</button>
+            </div>
+            <div class="project-view-area-wrapper">
+                 <div class="project-view-area" id="project-view-area">
+                    <!-- Project columns and cards will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popups will be inserted here by JavaScript -->
+    <div id="popup-container"></div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
