@@ -23,20 +23,6 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     // --- RENDER & LOGIC FUNCTIONS ---
-
-    // Placeholder function for you to implement the date calculation
-    const calculatePossibleDate = (projectId) => {
-        const project = allProjects.find(p => p.ProjectID === projectId);
-        if (!project) return '';
-
-        // --- START OF YOUR CUSTOM LOGIC ---
-        // This is a placeholder. You can replace this with your calculation.
-        // You have access to `project.tasks`, where each task has a `Duration`.
-        const placeholderDate = "Possible completion: TBD";
-        // --- END OF YOUR CUSTOM LOGIC ---
-
-        return placeholderDate;
-    };
     
     const renderProjects = (filterText = '') => {
         const lowerFilterText = filterText.toLowerCase();
@@ -67,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     '<p class="no-tasks-text">No tasks</p>'
                                 }
                             </div>
-                            <p class="possible-date">${calculatePossibleDate(project.ProjectID)}</p>
+                            <p class="possible-date">${project.possible_date}</p>
                         </div>
                     `).join('')}
                 </div>
@@ -125,7 +111,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const isNew = taskId === null;
         const task = isNew ? { Description: '', Notes: '', Duration: 1, ProjectID: projectId } : await api.get(`/api/task/${taskId}`);
         
-        // If it's a new task, clear the temp resource list. Otherwise, fetch existing resources.
         if (isNew) {
             newTaskResources = [];
         } else {
@@ -192,24 +177,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- EVENT LISTENERS ---
     
-    // Main Page Listeners
     newProjectBtn.addEventListener('click', () => renderProjectEditPopup());
     resourcesMenuBtn.addEventListener('click', e => { e.preventDefault(); resourcesMenuBtn.classList.add('active'); projectsMenuBtn.classList.remove('active'); renderResourcePopup(); });
     projectsMenuBtn.addEventListener('click', e => { e.preventDefault(); projectsMenuBtn.classList.add('active'); resourcesMenuBtn.classList.remove('active'); popupContainer.innerHTML = ''; loadProjects(); });
     document.getElementById('search-input').addEventListener('input', e => renderProjects(e.target.value));
     darkModeToggle.addEventListener('change', () => { themeStylesheet.href = darkModeToggle.checked ? 'css/dark.css' : 'css/style.css'; });
 
-    // Event Delegation
     document.addEventListener('click', async (e) => {
-        // --- Project Card Click ---
         if (e.target.closest('.project-card')) { renderProjectEditPopup(parseInt(e.target.closest('.project-card').dataset.projectId)); }
-
-        // --- Resource Management Popup ---
         if (e.target.matches('.close-popup-btn') && e.target.closest('#resource-manager-popup')) { projectsMenuBtn.click(); }
         if (e.target.id === 'add-resource-btn') { const input = document.getElementById('new-resource-name'); if (input.value) { await api.post('/api/resources', { Description: input.value }); renderResourcePopup(); } }
         if (e.target.matches('#resource-list .delete-icon-btn')) { if (confirm('Are you sure? This removes the resource from all tasks.')) { await api.delete(`/api/resource/${e.target.dataset.resourceId}`); renderResourcePopup(); } }
-
-        // --- Project Edit Popup ---
         if (e.target.id === 'cancel-project-btn') { document.getElementById('edit-project-popup').remove(); }
         if (e.target.id === 'save-project-btn') {
             const popup = e.target.closest('.popup-content');
@@ -226,8 +204,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.target.id === 'add-task-btn') { const projectId = e.target.closest('.popup-content').dataset.projectId; if (!projectId) { alert('Please save the project first.'); return; } renderTaskEditPopup(null, parseInt(projectId)); }
         if (e.target.matches('.task-delete-btn')) { if (confirm('Delete this task?')) { const taskId = e.target.dataset.taskId; const projectId = e.target.closest('.popup-content').dataset.projectId; await api.delete(`/api/task/${taskId}`); document.getElementById('edit-project-popup').remove(); renderProjectEditPopup(parseInt(projectId)); } }
         if (e.target.closest('#project-tasks-list .list-item') && !e.target.matches('.task-delete-btn')) { const item = e.target.closest('.list-item'); renderTaskEditPopup(parseInt(item.dataset.taskId), parseInt(item.closest('.popup-content').dataset.projectId)); }
-
-        // --- Task Edit Popup ---
         if (e.target.id === 'cancel-task-btn') { document.getElementById('edit-task-popup').remove(); }
         if (e.target.id === 'save-task-btn') {
             const popup = e.target.closest('.popup-content');
@@ -236,13 +212,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const taskId = popup.dataset.taskId;
             const originalProjectId = popup.dataset.projectId;
             const taskData = { Description: nameInput.value, ProjectID: parseInt(document.getElementById('task-project').value), Notes: document.getElementById('task-notes').value, Duration: parseFloat(document.getElementById('task-duration').value) || 1, DependentTaskID: document.getElementById('task-dependency').value ? parseInt(document.getElementById('task-dependency').value) : null };
-
-            if (taskId) { // Existing task
+            if (taskId) {
                 const existingTask = await api.get(`/api/task/${taskId}`);
                 taskData.Started = existingTask.Started;
                 taskData.Completed = existingTask.Completed;
                 await api.put(`/api/task/${taskId}`, taskData);
-            } else { // New task - send resources with it
+            } else {
                 taskData.ResourceIDs = newTaskResources.map(r => r.ResourceID);
                 await api.post('/api/task', taskData);
             }
@@ -258,30 +233,17 @@ document.addEventListener('DOMContentLoaded', function () {
             const resourceIdToRemove = parseInt(e.target.dataset.resourceId);
             const taskPopup = e.target.closest('.popup-content');
             const taskId = taskPopup.dataset.taskId;
-
-            if (taskId) { // For existing tasks, call API immediately
-                await api.delete(`/api/task/${taskId}/resource/${resourceIdToRemove}`);
-            }
-            // For both new and existing tasks, update the local state and re-render the list
+            if (taskId) { await api.delete(`/api/task/${taskId}/resource/${resourceIdToRemove}`); }
             newTaskResources = newTaskResources.filter(r => r.ResourceID !== resourceIdToRemove);
             document.getElementById('task-resources-list').innerHTML = newTaskResources.length > 0 ? newTaskResources.map(r => `<div class="list-item"><span class="item-text">${r.Description}</span><button class="delete-icon-btn remove-resource-from-task-btn" data-resource-id="${r.ResourceID}">✖</button></div>`).join('') : '<p>No resources required.</p>';
         }
-
-        // --- Resource Selection Popup ---
         if (e.target.id === 'cancel-resource-select') { document.getElementById('resource-selection-popup').remove(); }
         if (e.target.matches('.select-resource-item')) {
             const resourceId = parseInt(e.target.dataset.resourceId);
             const resourceName = e.target.dataset.resourceName;
-            const taskPopup = document.getElementById('edit-task-popup').querySelector('.popup-content');
-            const taskId = taskPopup.dataset.taskId;
-            
-            if (taskId) { // If task is saved, POST to API
-                await api.post(`/api/task/${taskId}/resources`, { ResourceID: resourceId });
-            } 
-            // Add to the local array for both new and existing tasks to update UI instantly
+            const taskId = document.getElementById('edit-task-popup').querySelector('.popup-content').dataset.taskId;
+            if (taskId) { await api.post(`/api/task/${taskId}/resources`, { ResourceID: resourceId }); } 
             newTaskResources.push({ ResourceID: resourceId, Description: resourceName });
-            
-            // Re-render the resource list in the task popup
             document.getElementById('task-resources-list').innerHTML = newTaskResources.map(r => `<div class="list-item"><span class="item-text">${r.Description}</span><button class="delete-icon-btn remove-resource-from-task-btn" data-resource-id="${r.ResourceID}">✖</button></div>`).join('');
             document.getElementById('resource-selection-popup').remove();
         }

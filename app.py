@@ -1,7 +1,7 @@
 import sqlite3
 import json
 from flask import Flask, jsonify, request, g, send_from_directory
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__, static_url_path='', static_folder='static')
 
@@ -36,6 +36,27 @@ def initdb_command():
     """Command to initialize the database."""
     init_db()
 
+# --- Backend Logic Functions ---
+
+def calculate_possible_date(project_id, db):
+    """
+    Calculates the earliest possible completion date for a project.
+    You can replace the logic within this function with your specific calculation.
+    """
+    cursor = db.execute(
+        'SELECT SUM(Duration) FROM Tasks WHERE ProjectID = ? AND Completed IS NULL',
+        (project_id,)
+    )
+    result = cursor.fetchone()
+    total_duration = result[0] if result[0] is not None else 0
+
+    if total_duration > 0:
+        completion_date = datetime.now() + timedelta(days=total_duration)
+        return f"Possible completion: {completion_date.strftime('%Y-%m-%d')}"
+    
+    return "All tasks completed"
+
+
 # --- API Endpoints ---
 
 @app.route('/api/projects', methods=['GET'])
@@ -44,15 +65,12 @@ def get_projects():
     projects_cur = db.execute('SELECT * FROM Project ORDER BY Description')
     projects = [dict(row) for row in projects_cur.fetchall()]
 
-    # Fetch all tasks and create a lookup map for dependency checks
     tasks_cur = db.execute('SELECT TaskID, ProjectID, Description, Started, Completed, DependentTaskID FROM Tasks ORDER BY TaskID')
     all_tasks = [dict(row) for row in tasks_cur.fetchall()]
     tasks_map = {task['TaskID']: task for task in all_tasks}
 
-    # Calculate status for each task and group them by ProjectID
     tasks_by_project = {}
     for task in all_tasks:
-        # --- STATUS CALCULATION LOGIC ---
         if task['Completed']:
             task['status'] = 'Completed'
         elif task['Started']:
@@ -67,9 +85,9 @@ def get_projects():
             tasks_by_project[pid] = []
         tasks_by_project[pid].append(task)
 
-    # Attach the tasks list to each project
     for project in projects:
         project['tasks'] = tasks_by_project.get(project['ProjectID'], [])
+        project['possible_date'] = calculate_possible_date(project['ProjectID'], db)
         
     return jsonify(projects)
 
@@ -81,16 +99,16 @@ def add_project():
     cursor = db.execute('INSERT INTO Project (Description, Bucket, Notes) VALUES (?, ?, ?)',
                [data['Description'], data['Bucket'], data['Notes']])
     db.commit()
-    # Return the newly created project with an empty tasks list
+    new_project_id = cursor.lastrowid
     new_project = {
-        'ProjectID': cursor.lastrowid,
+        'ProjectID': new_project_id,
         'Description': data['Description'],
         'Bucket': data['Bucket'],
         'Notes': data['Notes'],
-        'tasks': []
+        'tasks': [],
+        'possible_date': calculate_possible_date(new_project_id, db)
     }
-    return jsonify(new_project), 201
-
+    return jsonify(new_project), 21
 
 @app.route('/api/project/<int:project_id>', methods=['GET', 'PUT', 'DELETE'])
 def manage_project(project_id):
@@ -113,7 +131,8 @@ def manage_project(project_id):
 @app.route('/api/project/<int:project_id>/tasks', methods=['GET'])
 def get_project_tasks(project_id):
     db = get_db()
-    cur = db.execute('SELECT * FROM Tasks WHERE ProjectID = ? ORDER BY Description', [project_id])
+    # CORRECTED: Changed ORDER BY to TaskID
+    cur = db.execute('SELECT * FROM Tasks WHERE ProjectID = ? ORDER BY TaskID', [project_id])
     tasks = [dict(row) for row in cur.fetchall()]
     return jsonify(tasks)
     
@@ -128,7 +147,6 @@ def add_task():
         
         new_task_id = cursor.lastrowid
         
-        # If ResourceIDs are provided, insert them into RequiredResources
         resource_ids = data.get('ResourceIDs', [])
         if resource_ids:
             for resource_id in resource_ids:
@@ -139,7 +157,6 @@ def add_task():
     except Exception as e:
         db.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
 
 @app.route('/api/task/<int:task_id>', methods=['GET', 'PUT', 'DELETE'])
 def manage_task(task_id):
@@ -191,7 +208,6 @@ def manage_resources():
         except sqlite3.IntegrityError:
             return jsonify({'status': 'error', 'message': 'Resource already exists'}), 409
 
-
 @app.route('/api/resource/<int:resource_id>', methods=['DELETE'])
 def delete_resource(resource_id):
     db = get_db()
@@ -228,5 +244,4 @@ def index():
     return send_from_directory('static', 'index.html')
 
 if __name__ == '__main__':
-    # Run `flask initdb` first if the database does not exist
     app.run(debug=True)

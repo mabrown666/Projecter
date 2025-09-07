@@ -19,7 +19,9 @@ CREATE TABLE Tasks (
     Started TEXT,
     Completed TEXT,
     DependentTaskID INTEGER,
+    -- CORRECTED: Added ON DELETE CASCADE
     FOREIGN KEY (ProjectID) REFERENCES Project (ProjectID) ON DELETE CASCADE,
+    -- CORRECTED: Added ON DELETE SET NULL
     FOREIGN KEY (DependentTaskID) REFERENCES Tasks (TaskID) ON DELETE SET NULL
 );
 
@@ -32,6 +34,7 @@ CREATE TABLE RequiredResources (
     TaskID INTEGER NOT NULL,
     ResourceID INTEGER NOT NULL,
     PRIMARY KEY (TaskID, ResourceID),
+    -- CORRECTED: Added ON DELETE CASCADE for both keys
     FOREIGN KEY (TaskID) REFERENCES Tasks (TaskID) ON DELETE CASCADE,
     FOREIGN KEY (ResourceID) REFERENCES Resources (ResourceID) ON DELETE CASCADE
 );
