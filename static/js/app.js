@@ -2,13 +2,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- STATE ---
     let allProjects = [];
     let allResources = [];
-    // State for managing resources on a new, unsaved task
     let newTaskResources = [];
     
     // --- SELECTORS ---
     const projectViewArea = document.getElementById('project-view-area');
     const newProjectBtn = document.getElementById('new-project-btn');
     const projectsMenuBtn = document.getElementById('projects-menu-btn');
+    const jobsMenuBtn = document.getElementById('jobs-menu-btn');
     const resourcesMenuBtn = document.getElementById('resources-menu-btn');
     const popupContainer = document.getElementById('popup-container');
     const darkModeToggle = document.getElementById('dark-mode-toggle');
@@ -23,6 +23,13 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     // --- RENDER & LOGIC FUNCTIONS ---
+
+    const setActiveMenuButton = (activeBtn) => {
+        [projectsMenuBtn, jobsMenuBtn, resourcesMenuBtn].forEach(btn => {
+            btn.classList.remove('active');
+        });
+        activeBtn.classList.add('active');
+    };
     
     const renderProjects = (filterText = '') => {
         const lowerFilterText = filterText.toLowerCase();
@@ -59,6 +66,35 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             `;
         }).join('');
+    };
+    
+    const renderJobsPopup = (jobsData) => {
+        popupContainer.innerHTML = `
+            <div class="popup-overlay" id="jobs-popup">
+                <div class="popup-content">
+                    <div class="popup-header"><h2>Jobs Board</h2></div>
+                    <div class="popup-body">
+                        ${jobsData.map(resource => `
+                            <div class="jobs-resource-group">
+                                <h3>${resource.Description}</h3>
+                                <div class="jobs-task-list">
+                                    ${resource.tasks.length > 0 ? resource.tasks.map(task => `
+                                        <div class="jobs-task-item">
+                                            <strong>${task.Description}</strong> (Status: ${task.status})
+                                            <div class="jobs-task-item-project">Project: ${task.ProjectDescription}</div>
+                                        </div>
+                                    `).join('') : '<p>No available jobs for this resource.</p>'}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="popup-footer">
+                        <div class="right">
+                            <button class="btn btn-primary" id="jobs-done-btn">Done</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
     };
 
     const renderResourcePopup = async () => {
@@ -178,13 +214,43 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- EVENT LISTENERS ---
     
     newProjectBtn.addEventListener('click', () => renderProjectEditPopup());
-    resourcesMenuBtn.addEventListener('click', e => { e.preventDefault(); resourcesMenuBtn.classList.add('active'); projectsMenuBtn.classList.remove('active'); renderResourcePopup(); });
-    projectsMenuBtn.addEventListener('click', e => { e.preventDefault(); projectsMenuBtn.classList.add('active'); resourcesMenuBtn.classList.remove('active'); popupContainer.innerHTML = ''; loadProjects(); });
+
+    projectsMenuBtn.addEventListener('click', e => {
+        e.preventDefault();
+        setActiveMenuButton(projectsMenuBtn);
+        popupContainer.innerHTML = '';
+        loadProjects();
+    });
+
+    jobsMenuBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        setActiveMenuButton(jobsMenuBtn);
+        popupContainer.innerHTML = ''; 
+        const jobsData = await api.get('/api/jobs');
+        renderJobsPopup(jobsData);
+    });
+
+    resourcesMenuBtn.addEventListener('click', e => {
+        e.preventDefault();
+        setActiveMenuButton(resourcesMenuBtn);
+        popupContainer.innerHTML = '';
+        renderResourcePopup();
+    });
+
     document.getElementById('search-input').addEventListener('input', e => renderProjects(e.target.value));
-    darkModeToggle.addEventListener('change', () => { themeStylesheet.href = darkModeToggle.checked ? 'css/dark.css' : 'css/style.css'; });
+    
+    darkModeToggle.addEventListener('change', () => { 
+        themeStylesheet.href = darkModeToggle.checked ? 'css/dark.css' : 'css/style.css'; 
+    });
 
     document.addEventListener('click', async (e) => {
         if (e.target.closest('.project-card')) { renderProjectEditPopup(parseInt(e.target.closest('.project-card').dataset.projectId)); }
+        
+        if (e.target.id === 'jobs-done-btn') {
+            popupContainer.innerHTML = '';
+            projectsMenuBtn.click();
+        }
+
         if (e.target.matches('.close-popup-btn') && e.target.closest('#resource-manager-popup')) { projectsMenuBtn.click(); }
         if (e.target.id === 'add-resource-btn') { const input = document.getElementById('new-resource-name'); if (input.value) { await api.post('/api/resources', { Description: input.value }); renderResourcePopup(); } }
         if (e.target.matches('#resource-list .delete-icon-btn')) { if (confirm('Are you sure? This removes the resource from all tasks.')) { await api.delete(`/api/resource/${e.target.dataset.resourceId}`); renderResourcePopup(); } }
@@ -250,6 +316,15 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // --- INITIALIZATION ---
-    const loadProjects = async () => { try { allProjects = await api.get('/api/projects'); renderProjects(); } catch (error) { console.error("Failed to load projects:", error); projectViewArea.innerHTML = "<p>Could not load projects. Is the server running?</p>"; } };
+    const loadProjects = async () => { 
+        try { 
+            allProjects = await api.get('/api/projects'); 
+            renderProjects(); 
+        } catch (error) { 
+            console.error("Failed to load projects:", error); 
+            projectViewArea.innerHTML = "<p>Could not load projects. Is the server running?</p>"; 
+        } 
+    };
+    
     loadProjects();
 });

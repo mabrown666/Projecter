@@ -303,7 +303,6 @@ textarea.form-control {
     margin: 0;
 }
 
-/* NEW STYLE for Possible Date */
 .possible-date {
     margin-top: 16px;
     font-size: 13px;
@@ -312,4 +311,33 @@ textarea.form-control {
     text-align: right;
     border-top: 1px dashed var(--border-color);
     padding-top: 8px;
+}
+
+/* NEW STYLES for Jobs Popup */
+.jobs-resource-group {
+    margin-bottom: 20px;
+}
+
+.jobs-resource-group h3 {
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--accent-color);
+}
+
+.jobs-task-item {
+    padding: 8px;
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+.jobs-task-item strong {
+    font-weight: 500;
+}
+
+.jobs-task-item-project {
+    font-style: italic;
+    color: var(--secondary-text-color);
 }

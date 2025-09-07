@@ -6,24 +6,21 @@ from datetime import datetime, timedelta
 app = Flask(__name__, static_url_path='', static_folder='static')
 
 def get_db():
-    """Opens a new database connection if there is none yet for the current application context."""
     if 'db' not in g:
         with open('config.json') as f:
             config = json.load(f)
         g.db = sqlite3.connect(config['database']['name'])
         g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys = ON") # Enforce foreign key constraints
+        g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
 
 @app.teardown_appcontext
 def close_db(exception):
-    """Closes the database again at the end of the request."""
     db = g.pop('db', None)
     if db is not None:
         db.close()
 
 def init_db():
-    """Initializes the database from the schema file."""
     with app.app_context():
         db = get_db()
         with app.open_resource('schema.sql', mode='r') as f:
@@ -33,38 +30,82 @@ def init_db():
 
 @app.cli.command('initdb')
 def initdb_command():
-    """Command to initialize the database."""
     init_db()
 
 # --- Backend Logic Functions ---
 
 def calculate_possible_date(project_id, db):
-    """
-    Calculates the earliest possible completion date for a project.
-    You can replace the logic within this function with your specific calculation.
-    """
     cursor = db.execute(
         'SELECT SUM(Duration) FROM Tasks WHERE ProjectID = ? AND Completed IS NULL',
         (project_id,)
     )
     result = cursor.fetchone()
     total_duration = result[0] if result[0] is not None else 0
-
     if total_duration > 0:
         completion_date = datetime.now() + timedelta(days=total_duration)
         return f"Possible completion: {completion_date.strftime('%Y-%m-%d')}"
-    
     return "All tasks completed"
 
-
 # --- API Endpoints ---
+
+@app.route('/api/jobs', methods=['GET'])
+def get_jobs():
+    db = get_db()
+    
+    # 1. Fetch all necessary data in bulk
+    all_resources = [dict(row) for row in db.execute('SELECT * FROM Resources ORDER BY Description').fetchall()]
+    uncompleted_tasks_rows = db.execute('''
+        SELECT T.*, P.Description as ProjectDescription 
+        FROM Tasks T
+        JOIN Project P ON T.ProjectID = P.ProjectID
+        WHERE T.Completed IS NULL
+    ''').fetchall()
+    
+    tasks_map = {row['TaskID']: dict(row) for row in uncompleted_tasks_rows}
+    required_resources = db.execute('SELECT * FROM RequiredResources').fetchall()
+
+    # 2. Group tasks by resource
+    tasks_by_resource_id = {res['ResourceID']: [] for res in all_resources}
+    for link in required_resources:
+        task_id = link['TaskID']
+        resource_id = link['ResourceID']
+        if task_id in tasks_map:
+            tasks_by_resource_id[resource_id].append(tasks_map[task_id])
+
+    # 3. Build the final data structure with filtering and status calculation
+    jobs_data = []
+    for resource in all_resources:
+        job_resource = {
+            'ResourceID': resource['ResourceID'],
+            'Description': resource['Description'],
+            'tasks': []
+        }
+        
+        for task in tasks_by_resource_id[resource['ResourceID']]:
+            # Filter out tasks with unmet dependencies
+            dep_id = task.get('DependentTaskID')
+            if dep_id and dep_id in tasks_map: # Dependency exists and is not completed
+                continue # Skip this task
+
+            # Calculate status for tasks that pass the filter
+            status = 'Active' if task.get('Started') else 'Waiting'
+            
+            job_resource['tasks'].append({
+                'TaskID': task['TaskID'],
+                'Description': task['Description'],
+                'ProjectDescription': task['ProjectDescription'],
+                'status': status
+            })
+        
+        jobs_data.append(job_resource)
+
+    return jsonify(jobs_data)
 
 @app.route('/api/projects', methods=['GET'])
 def get_projects():
     db = get_db()
     projects_cur = db.execute('SELECT * FROM Project ORDER BY Description')
     projects = [dict(row) for row in projects_cur.fetchall()]
-
     tasks_cur = db.execute('SELECT TaskID, ProjectID, Description, Started, Completed, DependentTaskID FROM Tasks ORDER BY TaskID')
     all_tasks = [dict(row) for row in tasks_cur.fetchall()]
     tasks_map = {task['TaskID']: task for task in all_tasks}
@@ -91,6 +132,7 @@ def get_projects():
         
     return jsonify(projects)
 
+# ... (rest of the app.py file remains the same) ...
 
 @app.route('/api/project', methods=['POST'])
 def add_project():
@@ -108,7 +150,8 @@ def add_project():
         'tasks': [],
         'possible_date': calculate_possible_date(new_project_id, db)
     }
-    return jsonify(new_project), 21
+    return jsonify(new_project), 201
+
 
 @app.route('/api/project/<int:project_id>', methods=['GET', 'PUT', 'DELETE'])
 def manage_project(project_id):
@@ -131,7 +174,6 @@ def manage_project(project_id):
 @app.route('/api/project/<int:project_id>/tasks', methods=['GET'])
 def get_project_tasks(project_id):
     db = get_db()
-    # CORRECTED: Changed ORDER BY to TaskID
     cur = db.execute('SELECT * FROM Tasks WHERE ProjectID = ? ORDER BY TaskID', [project_id])
     tasks = [dict(row) for row in cur.fetchall()]
     return jsonify(tasks)
@@ -236,8 +278,6 @@ def remove_task_resource(task_id, resource_id):
     db.execute('DELETE FROM RequiredResources WHERE TaskID = ? AND ResourceID = ?', [task_id, resource_id])
     db.commit()
     return jsonify({'status': 'success'})
-
-# --- Frontend Serving ---
 
 @app.route('/')
 def index():
