@@ -3,7 +3,7 @@
 :root {
     --app-bg: #f8f9fa;
     --sidebar-bg: #ffffff;
-    --main-text-color: #1a202c;
+    --main-text-color: #93afe7;
     --secondary-text-color: #718096;
     --header-bg: #ffffff;
     --card-bg: #ffffff;
@@ -210,6 +210,7 @@ body {
     border-radius: 6px;
     border: 1px solid var(--border-color);
     background-color: var(--input-bg);
+    color: var(--main-text-color);
     box-sizing: border-box;
 }
 textarea.form-control {
