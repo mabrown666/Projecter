@@ -52,10 +52,9 @@ def calculate_possible_date(project_id, db):
 def get_jobs():
     db = get_db()
     
-    # 1. Fetch all necessary data in bulk
     all_resources = [dict(row) for row in db.execute('SELECT * FROM Resources ORDER BY Description').fetchall()]
     uncompleted_tasks_rows = db.execute('''
-        SELECT T.*, P.Description as ProjectDescription 
+        SELECT T.*, P.Description as ProjectDescription
         FROM Tasks T
         JOIN Project P ON T.ProjectID = P.ProjectID
         WHERE T.Completed IS NULL
@@ -64,7 +63,6 @@ def get_jobs():
     tasks_map = {row['TaskID']: dict(row) for row in uncompleted_tasks_rows}
     required_resources = db.execute('SELECT * FROM RequiredResources').fetchall()
 
-    # 2. Group tasks by resource
     tasks_by_resource_id = {res['ResourceID']: [] for res in all_resources}
     for link in required_resources:
         task_id = link['TaskID']
@@ -72,7 +70,6 @@ def get_jobs():
         if task_id in tasks_map:
             tasks_by_resource_id[resource_id].append(tasks_map[task_id])
 
-    # 3. Build the final data structure with filtering and status calculation
     jobs_data = []
     for resource in all_resources:
         job_resource = {
@@ -82,16 +79,15 @@ def get_jobs():
         }
         
         for task in tasks_by_resource_id[resource['ResourceID']]:
-            # Filter out tasks with unmet dependencies
             dep_id = task.get('DependentTaskID')
-            if dep_id and dep_id in tasks_map: # Dependency exists and is not completed
-                continue # Skip this task
+            if dep_id and dep_id in tasks_map:
+                continue
 
-            # Calculate status for tasks that pass the filter
             status = 'Active' if task.get('Started') else 'Waiting'
             
             job_resource['tasks'].append({
                 'TaskID': task['TaskID'],
+                'ProjectID': task['ProjectID'], # CORRECTED: Added ProjectID to the response
                 'Description': task['Description'],
                 'ProjectDescription': task['ProjectDescription'],
                 'status': status
@@ -101,6 +97,8 @@ def get_jobs():
 
     return jsonify(jobs_data)
 
+
+# ... (The rest of app.py is unchanged) ...
 @app.route('/api/projects', methods=['GET'])
 def get_projects():
     db = get_db()
@@ -131,8 +129,6 @@ def get_projects():
         project['possible_date'] = calculate_possible_date(project['ProjectID'], db)
         
     return jsonify(projects)
-
-# ... (rest of the app.py file remains the same) ...
 
 @app.route('/api/project', methods=['POST'])
 def add_project():

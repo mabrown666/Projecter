@@ -53,10 +53,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     <h2>${bucket}</h2>
                     ${projectsInBucket.map(project => `
                         <div class="project-card" data-project-id="${project.ProjectID}">
-                            <h3>${project.Description}</h3>
+                            <h3 data-project-id="${project.ProjectID}">${project.Description}</h3>
                             <div class="project-card-task-list">
                                 ${project.tasks && project.tasks.length > 0 ? 
-                                    `<ul>${project.tasks.map(task => `<li>${task.Description} (${task.status})</li>`).join('')}</ul>` : 
+                                    `<ul>${project.tasks.map(task => `<li data-task-id="${task.TaskID}">${task.Description} (${task.status})</li>`).join('')}</ul>` : 
                                     '<p class="no-tasks-text">No tasks</p>'
                                 }
                             </div>
@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <h3>${resource.Description}</h3>
                                 <div class="jobs-task-list">
                                     ${resource.tasks.length > 0 ? resource.tasks.map(task => `
-                                        <div class="jobs-task-item">
+                                        <div class="jobs-task-item" data-task-id="${task.TaskID}" data-project-id="${task.ProjectID}">
                                             <strong>${task.Description}</strong> (Status: ${task.status})
                                             <div class="jobs-task-item-project">Project: ${task.ProjectDescription}</div>
                                         </div>
@@ -241,81 +241,66 @@ document.addEventListener('DOMContentLoaded', function () {
     
     darkModeToggle.addEventListener('change', () => { 
         themeStylesheet.href = darkModeToggle.checked ? 'css/dark.css' : 'css/style.css'; 
+        localStorage.setItem('darkMode', darkModeToggle.checked);
     });
 
     document.addEventListener('click', async (e) => {
-        if (e.target.closest('.project-card')) { renderProjectEditPopup(parseInt(e.target.closest('.project-card').dataset.projectId)); }
+        if (e.target.matches('.project-card-task-list li')) {
+            const taskItem = e.target;
+            const taskId = parseInt(taskItem.dataset.taskId);
+            const projectId = parseInt(taskItem.closest('.project-card').dataset.projectId);
+            await renderProjectEditPopup(projectId);
+            await renderTaskEditPopup(taskId, projectId);
+            return;
+        }
+
+        if (e.target.closest('.jobs-task-item')) {
+            const taskItem = e.target.closest('.jobs-task-item');
+            const taskId = parseInt(taskItem.dataset.taskId);
+            const projectId = parseInt(taskItem.dataset.projectId);
+            popupContainer.innerHTML = '';
+            await renderProjectEditPopup(projectId);
+            await renderTaskEditPopup(taskId, projectId);
+            return;
+        }
+
+        if (e.target.matches('.project-card h3')) { 
+            renderProjectEditPopup(parseInt(e.target.dataset.projectId)); 
+        }
         
         if (e.target.id === 'jobs-done-btn') {
             popupContainer.innerHTML = '';
             projectsMenuBtn.click();
         }
-
+        
         if (e.target.matches('.close-popup-btn') && e.target.closest('#resource-manager-popup')) { projectsMenuBtn.click(); }
         if (e.target.id === 'add-resource-btn') { const input = document.getElementById('new-resource-name'); if (input.value) { await api.post('/api/resources', { Description: input.value }); renderResourcePopup(); } }
         if (e.target.matches('#resource-list .delete-icon-btn')) { if (confirm('Are you sure? This removes the resource from all tasks.')) { await api.delete(`/api/resource/${e.target.dataset.resourceId}`); renderResourcePopup(); } }
         if (e.target.id === 'cancel-project-btn') { document.getElementById('edit-project-popup').remove(); }
-        if (e.target.id === 'save-project-btn') {
-            const popup = e.target.closest('.popup-content');
-            const nameInput = document.getElementById('project-name');
-            if (!nameInput.value.trim()) { alert('Project Name is required.'); return; }
-            const projectId = popup.dataset.projectId;
-            const data = { Description: nameInput.value, Bucket: document.getElementById('project-bucket').value, Notes: document.getElementById('project-notes').value };
-            if (projectId) { await api.put(`/api/project/${projectId}`, data); } 
-            else { await api.post('/api/project', data); }
-            popup.parentElement.remove();
-            loadProjects();
-        }
+        if (e.target.id === 'save-project-btn') { const popup = e.target.closest('.popup-content'); const nameInput = document.getElementById('project-name'); if (!nameInput.value.trim()) { alert('Project Name is required.'); return; } const projectId = popup.dataset.projectId; const data = { Description: nameInput.value, Bucket: document.getElementById('project-bucket').value, Notes: document.getElementById('project-notes').value }; if (projectId) { await api.put(`/api/project/${projectId}`, data); } else { await api.post('/api/project', data); } popup.parentElement.remove(); loadProjects(); }
         if (e.target.id === 'delete-project-btn') { if (confirm('Delete this project and ALL its tasks?')) { await api.delete(`/api/project/${e.target.closest('.popup-content').dataset.projectId}`); e.target.closest('.popup-overlay').remove(); loadProjects(); } }
         if (e.target.id === 'add-task-btn') { const projectId = e.target.closest('.popup-content').dataset.projectId; if (!projectId) { alert('Please save the project first.'); return; } renderTaskEditPopup(null, parseInt(projectId)); }
         if (e.target.matches('.task-delete-btn')) { if (confirm('Delete this task?')) { const taskId = e.target.dataset.taskId; const projectId = e.target.closest('.popup-content').dataset.projectId; await api.delete(`/api/task/${taskId}`); document.getElementById('edit-project-popup').remove(); renderProjectEditPopup(parseInt(projectId)); } }
         if (e.target.closest('#project-tasks-list .list-item') && !e.target.matches('.task-delete-btn')) { const item = e.target.closest('.list-item'); renderTaskEditPopup(parseInt(item.dataset.taskId), parseInt(item.closest('.popup-content').dataset.projectId)); }
         if (e.target.id === 'cancel-task-btn') { document.getElementById('edit-task-popup').remove(); }
-        if (e.target.id === 'save-task-btn') {
-            const popup = e.target.closest('.popup-content');
-            const nameInput = document.getElementById('task-name');
-            if (!nameInput.value.trim()) { alert('Task Name is required.'); return; }
-            const taskId = popup.dataset.taskId;
-            const originalProjectId = popup.dataset.projectId;
-            const taskData = { Description: nameInput.value, ProjectID: parseInt(document.getElementById('task-project').value), Notes: document.getElementById('task-notes').value, Duration: parseFloat(document.getElementById('task-duration').value) || 1, DependentTaskID: document.getElementById('task-dependency').value ? parseInt(document.getElementById('task-dependency').value) : null };
-            if (taskId) {
-                const existingTask = await api.get(`/api/task/${taskId}`);
-                taskData.Started = existingTask.Started;
-                taskData.Completed = existingTask.Completed;
-                await api.put(`/api/task/${taskId}`, taskData);
-            } else {
-                taskData.ResourceIDs = newTaskResources.map(r => r.ResourceID);
-                await api.post('/api/task', taskData);
-            }
-            popup.parentElement.remove();
-            document.getElementById('edit-project-popup')?.remove();
-            renderProjectEditPopup(parseInt(originalProjectId));
-            loadProjects();
-        }
+        if (e.target.id === 'save-task-btn') { const popup = e.target.closest('.popup-content'); const nameInput = document.getElementById('task-name'); if (!nameInput.value.trim()) { alert('Task Name is required.'); return; } const taskId = popup.dataset.taskId; const originalProjectId = popup.dataset.projectId; const taskData = { Description: nameInput.value, ProjectID: parseInt(document.getElementById('task-project').value), Notes: document.getElementById('task-notes').value, Duration: parseFloat(document.getElementById('task-duration').value) || 1, DependentTaskID: document.getElementById('task-dependency').value ? parseInt(document.getElementById('task-dependency').value) : null }; if (taskId) { const existingTask = await api.get(`/api/task/${taskId}`); taskData.Started = existingTask.Started; taskData.Completed = existingTask.Completed; await api.put(`/api/task/${taskId}`, taskData); } else { taskData.ResourceIDs = newTaskResources.map(r => r.ResourceID); await api.post('/api/task', taskData); } popup.parentElement.remove(); document.getElementById('edit-project-popup')?.remove(); renderProjectEditPopup(parseInt(originalProjectId)); loadProjects(); }
         if (e.target.id === 'delete-task-btn') { if (confirm('Delete this task?')) { const popup = e.target.closest('.popup-content'); await api.delete(`/api/task/${popup.dataset.taskId}`); popup.parentElement.remove(); document.getElementById('edit-project-popup')?.remove(); renderProjectEditPopup(parseInt(popup.dataset.projectId)); } }
         if (e.target.id === 'start-task-btn' || e.target.id === 'finish-task-btn') { const taskId = e.target.closest('.popup-content').dataset.taskId; if (e.target.id === 'start-task-btn') await api.post(`/api/task/${taskId}/start`); else await api.post(`/api/task/${taskId}/finish`); document.getElementById('save-task-btn').click(); }
         if (e.target.id === 'add-resource-to-task-btn') { const existingResourceIds = newTaskResources.map(r => r.ResourceID); renderResourceSelectionPopup(existingResourceIds); }
-        if (e.target.matches('.remove-resource-from-task-btn')) {
-            const resourceIdToRemove = parseInt(e.target.dataset.resourceId);
-            const taskPopup = e.target.closest('.popup-content');
-            const taskId = taskPopup.dataset.taskId;
-            if (taskId) { await api.delete(`/api/task/${taskId}/resource/${resourceIdToRemove}`); }
-            newTaskResources = newTaskResources.filter(r => r.ResourceID !== resourceIdToRemove);
-            document.getElementById('task-resources-list').innerHTML = newTaskResources.length > 0 ? newTaskResources.map(r => `<div class="list-item"><span class="item-text">${r.Description}</span><button class="delete-icon-btn remove-resource-from-task-btn" data-resource-id="${r.ResourceID}">✖</button></div>`).join('') : '<p>No resources required.</p>';
-        }
+        if (e.target.matches('.remove-resource-from-task-btn')) { const resourceIdToRemove = parseInt(e.target.dataset.resourceId); const taskPopup = e.target.closest('.popup-content'); const taskId = taskPopup.dataset.taskId; if (taskId) { await api.delete(`/api/task/${taskId}/resource/${resourceIdToRemove}`); } newTaskResources = newTaskResources.filter(r => r.ResourceID !== resourceIdToRemove); document.getElementById('task-resources-list').innerHTML = newTaskResources.length > 0 ? newTaskResources.map(r => `<div class="list-item"><span class="item-text">${r.Description}</span><button class="delete-icon-btn remove-resource-from-task-btn" data-resource-id="${r.ResourceID}">✖</button></div>`).join('') : '<p>No resources required.</p>'; }
         if (e.target.id === 'cancel-resource-select') { document.getElementById('resource-selection-popup').remove(); }
-        if (e.target.matches('.select-resource-item')) {
-            const resourceId = parseInt(e.target.dataset.resourceId);
-            const resourceName = e.target.dataset.resourceName;
-            const taskId = document.getElementById('edit-task-popup').querySelector('.popup-content').dataset.taskId;
-            if (taskId) { await api.post(`/api/task/${taskId}/resources`, { ResourceID: resourceId }); } 
-            newTaskResources.push({ ResourceID: resourceId, Description: resourceName });
-            document.getElementById('task-resources-list').innerHTML = newTaskResources.map(r => `<div class="list-item"><span class="item-text">${r.Description}</span><button class="delete-icon-btn remove-resource-from-task-btn" data-resource-id="${r.ResourceID}">✖</button></div>`).join('');
-            document.getElementById('resource-selection-popup').remove();
-        }
+        if (e.target.matches('.select-resource-item')) { const resourceId = parseInt(e.target.dataset.resourceId); const resourceName = e.target.dataset.resourceName; const taskId = document.getElementById('edit-task-popup').querySelector('.popup-content').dataset.taskId; if (taskId) { await api.post(`/api/task/${taskId}/resources`, { ResourceID: resourceId }); } newTaskResources.push({ ResourceID: resourceId, Description: resourceName }); document.getElementById('task-resources-list').innerHTML = newTaskResources.map(r => `<div class="list-item"><span class="item-text">${r.Description}</span><button class="delete-icon-btn remove-resource-from-task-btn" data-resource-id="${r.ResourceID}">✖</button></div>`).join(''); document.getElementById('resource-selection-popup').remove(); }
+
     });
 
     // --- INITIALIZATION ---
+    const initialize = () => {
+        const isDarkMode = localStorage.getItem('darkMode') === 'true';
+        darkModeToggle.checked = isDarkMode;
+        themeStylesheet.href = isDarkMode ? 'css/dark.css' : 'css/style.css';
+        loadProjects();
+    }
+
     const loadProjects = async () => { 
         try { 
             allProjects = await api.get('/api/projects'); 
@@ -326,5 +311,5 @@ document.addEventListener('DOMContentLoaded', function () {
         } 
     };
     
-    loadProjects();
+    initialize();
 });

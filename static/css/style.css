@@ -286,17 +286,6 @@ textarea.form-control {
     gap: 6px;
 }
 
-.project-card-task-list li {
-    font-size: 14px;
-    color: var(--secondary-text-color);
-    background-color: var(--input-bg);
-    padding: 6px 10px;
-    border-radius: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 .no-tasks-text {
     font-size: 14px;
     color: var(--secondary-text-color);
@@ -341,4 +330,58 @@ textarea.form-control {
 .jobs-task-item-project {
     font-style: italic;
     color: var(--secondary-text-color);
+}
+
+/* ... (all previous CSS remains the same) ... */
+
+/* NEW STYLES for Jobs Popup */
+.jobs-resource-group {
+    margin-bottom: 20px;
+}
+
+.jobs-resource-group h3 {
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--accent-color);
+}
+
+.jobs-task-item {
+    padding: 8px;
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    margin-bottom: 6px;
+    font-size: 14px;
+    cursor: pointer; /* ADDED */
+}
+
+/* ADDED */
+.jobs-task-item:hover {
+    background-color: var(--border-color);
+}
+
+.jobs-task-item strong {
+    font-weight: 500;
+}
+
+.jobs-task-item-project {
+    font-style: italic;
+    color: var(--secondary-text-color);
+}
+
+.project-card-task-list li {
+    font-size: 14px;
+    color: var(--main-text-color);
+    background-color: var(--input-bg);
+    padding: 6px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.project-card-task-list li:hover {
+    color: var(--main-text-color);
+    background-color: var(--border-color);
 }
