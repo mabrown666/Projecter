@@ -35,15 +35,44 @@ def initdb_command():
 # --- Backend Logic Functions ---
 
 def calculate_possible_date(project_id, db):
-    cursor = db.execute(
-        'SELECT SUM(Duration) FROM Tasks WHERE ProjectID = ? AND Completed IS NULL',
+    # Find the latest estimated end date of active tasks
+    active_tasks_cursor = db.execute(
+        'SELECT Started, Duration FROM Tasks WHERE ProjectID = ? AND Started IS NOT NULL AND Completed IS NULL',
         (project_id,)
     )
-    result = cursor.fetchone()
-    total_duration = result[0] if result[0] is not None else 0
+    active_tasks = active_tasks_cursor.fetchall()
+
+    start_date = datetime.now()
+    if active_tasks:
+        latest_end_date = None
+        for task in active_tasks:
+            started_date = datetime.fromisoformat(task['Started'])
+            duration = task['Duration']
+            estimated_end_date = started_date + timedelta(days=duration)
+
+            if latest_end_date is None or estimated_end_date > latest_end_date:
+                latest_end_date = estimated_end_date
+
+        if latest_end_date is not None and latest_end_date > start_date:
+            start_date = latest_end_date
+
+    total_duration = 0
+    # Calculate the total duration of unstarted tasks
+
+    unstarted_tasks_cursor = db.execute(
+        'SELECT SUM(Duration) FROM Tasks WHERE ProjectID = ? AND Started IS NULL',
+        (project_id,)
+    )
+    unstarted_tasks_result = unstarted_tasks_cursor.fetchone()
+    total_duration = unstarted_tasks_result[0] if unstarted_tasks_result[0] is not None else 0
+
     if total_duration > 0:
-        completion_date = datetime.now() + timedelta(days=total_duration)
+        completion_date = start_date + timedelta(days=total_duration)
         return f"Possible completion: {completion_date.strftime('%Y-%m-%d')}"
+
+    elif active_tasks:
+        return f"Possible completion: {start_date.strftime('%Y-%m-%d')}"
+
     return "All tasks completed"
 
 # --- API Endpoints ---
